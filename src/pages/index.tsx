@@ -1,31 +1,61 @@
 import Head from "next/head";
 import styles from "@/styles/Home.module.css";
 import Textarea from "@mui/joy/Textarea";
-import { Button, Container, Grid, Input } from "@mui/joy";
+import { Button, Container, FormLabel, Grid, Input } from "@mui/joy";
 import { useState } from "react";
+import { v4 as uuidV4 } from "uuid";
 
-type KnowledgeGraph = {
-  nodes: {
+type KnowledgeGraphNode = {
     id: string;
     text: string;
     embeddings: any;
-  }[];
+  }
+type KnowledgeGraph = {
+  nodes: KnowledgeGraphNode[];
   edges: {
-    cause: KnowledgeGraph["nodes"][0]["id"];
-    effect: KnowledgeGraph["nodes"][0]["id"];
+    cause: KnowledgeGraphNode["id"];
+    effect: KnowledgeGraphNode["id"];
   }[];
 };
 
-export default function Home() {
-  const [storyText, setStoryText] = useState<string>();
-  const [openAiApiKey, setOpenAiApiKey] = useState<string>();
-  const [knowledgeGraph, setKnowledgeGraph] = useState<KnowledgeGraph>({
-    nodes: [],
-    edges: [],
-  });
+const isStory = async (storyText: string) => true
 
-  const onSubmit = () => {
-    // todo
+const getEndingNode = async (
+  storyText: string,
+  initialPrompt: string
+): Promise<KnowledgeGraphNode> => ({
+  id: uuidV4(),
+  embeddings: [],
+  text: "",
+});
+
+export default function Home() {
+  const [openAiApiKey, setOpenAiApiKey] = useState<string>();
+  const [storyText, setStoryText] = useState<string>();
+  const [initialPrompt, setInitialPrompt] = useState<string>();
+  const [knowledgeGraph, setKnowledgeGraph] = useState<
+    KnowledgeGraph | undefined
+  >(undefined);
+
+  const createKnowledgeGraph = async (
+    storyText: string,
+    initialPrompt: string
+  ): Promise<KnowledgeGraph> => {
+    const knowledgeGraph: KnowledgeGraph = {
+      nodes: [],
+      edges: [],
+    };
+
+    if (!(await isStory(storyText)))
+      throw new Error("The text does not contain a story");
+
+    const endingNode = await getEndingNode(storyText, initialPrompt);
+    return knowledgeGraph;
+  };
+
+  const onSubmit = async () => {
+    if (storyText && initialPrompt)
+      setKnowledgeGraph(await createKnowledgeGraph(storyText, initialPrompt));
   };
 
   return (
@@ -40,27 +70,48 @@ export default function Home() {
         <Container className={styles.center}>
           <Grid container xs={12} spacing={2}>
             <Grid xs={12}>
+              <FormLabel>OpenAI API Key</FormLabel>
               <Input
-                placeholder="OpenAI API Key"
+                placeholder="xxxxxxxx"
                 type="password"
                 value={openAiApiKey}
                 onChange={(e) => setOpenAiApiKey(e.target.value)}
               />
             </Grid>
             <Grid xs={12}>
+              <FormLabel>The story</FormLabel>
               <Textarea
-                placeholder="Type a story..."
+                placeholder="Once upon a time..."
                 value={storyText}
                 onChange={(e) => setStoryText(e.target.value)}
                 size="lg"
                 sx={{ width: "100%" }}
               />
             </Grid>
-            <Grid>
-              <Button onClick={onSubmit} disabled={!storyText || !openAiApiKey}>
+            <Grid xs={12}>
+              <FormLabel>Initial prompt</FormLabel>
+              <Textarea
+                placeholder="What is the ending of the story?"
+                value={initialPrompt}
+                onChange={(e) => setInitialPrompt(e.target.value)}
+                size="lg"
+                sx={{ width: "100%" }}
+              />
+            </Grid>
+            <Grid xs={12}>
+              <Button
+                onClick={onSubmit}
+                disabled={!storyText || !openAiApiKey || !initialPrompt}
+              >
                 {" "}
                 Create{" "}
               </Button>
+            </Grid>
+            <Grid xs={12}>
+              <Textarea
+                variant="solid"
+                value={JSON.stringify(knowledgeGraph, null, 2)}
+              />
             </Grid>
           </Grid>
         </Container>
