@@ -1,33 +1,32 @@
-import Head from 'next/head'
-import styles from '@/styles/Home.module.css'
-import Textarea from '@mui/joy/Textarea';
-import { Button, Container, Grid, Input } from '@mui/joy';
-import { useState } from 'react';
+import Head from "next/head";
+import styles from "@/styles/Home.module.css";
+import Textarea from "@mui/joy/Textarea";
+import { Button, Container, Grid, Input } from "@mui/joy";
+import { useState } from "react";
 
 type KnowledgeGraph = {
   nodes: {
-    id: string,
-    text: string,
-    embeddings: any,
-  }[],
+    id: string;
+    text: string;
+    embeddings: any;
+  }[];
   edges: {
-    cause: KnowledgeGraph["nodes"][0]["id"]
-    effect: KnowledgeGraph["nodes"][0]["id"]
-  }[]
-}
+    cause: KnowledgeGraph["nodes"][0]["id"];
+    effect: KnowledgeGraph["nodes"][0]["id"];
+  }[];
+};
 
 export default function Home() {
-
-  const [storyText, setStoryText] = useState<string>()
-  const [openAiApiKey, setOpenAiApiKey] = useState<string>()
+  const [storyText, setStoryText] = useState<string>();
+  const [openAiApiKey, setOpenAiApiKey] = useState<string>();
   const [knowledgeGraph, setKnowledgeGraph] = useState<KnowledgeGraph>({
     nodes: [],
-    edges: []
-  })
+    edges: [],
+  });
 
   const onSubmit = () => {
     // todo
-  }
+  };
 
   return (
     <>
@@ -42,27 +41,30 @@ export default function Home() {
           <Grid container xs={12} spacing={2}>
             <Grid xs={12}>
               <Input
-                placeholder='OpenAI API Key' 
-                type="password" 
-                value={openAiApiKey} 
-                onChange={e => setOpenAiApiKey(e.target.value)} 
+                placeholder="OpenAI API Key"
+                type="password"
+                value={openAiApiKey}
+                onChange={(e) => setOpenAiApiKey(e.target.value)}
               />
             </Grid>
             <Grid xs={12}>
-              <Textarea 
+              <Textarea
                 placeholder="Type a story..."
                 value={storyText}
-                onChange={e => setStoryText(e.target.value)}
-                size='lg'
-                sx={{width: "100%"}}
+                onChange={(e) => setStoryText(e.target.value)}
+                size="lg"
+                sx={{ width: "100%" }}
               />
             </Grid>
             <Grid>
-              <Button onClick={onSubmit} disabled={!storyText || !openAiApiKey}> Create </Button>
+              <Button onClick={onSubmit} disabled={!storyText || !openAiApiKey}>
+                {" "}
+                Create{" "}
+              </Button>
             </Grid>
           </Grid>
         </Container>
       </main>
     </>
-  )
+  );
 }
