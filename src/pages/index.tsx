@@ -26,10 +26,7 @@ export default function Home() {
   })
 
   const onSubmit = () => {
-    fetch("/api/submit", {
-      method: "POST",
-      body: JSON.stringify({ storyText })
-    })
+    // todo
   }
 
   return (
