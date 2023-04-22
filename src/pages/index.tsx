@@ -4,12 +4,22 @@ import Textarea from "@mui/joy/Textarea";
 import { Button, Container, FormLabel, Grid, Input } from "@mui/joy";
 import { useState } from "react";
 import { v4 as uuidV4 } from "uuid";
+import dynamic from "next/dynamic";
+
+const GraphCanvas = dynamic(
+  () => import("reagraph").then((reagraph) => reagraph.GraphCanvas),
+  {
+    ssr: false,
+    loading: () => <div>loading...</div>,
+  }
+);
+
 
 type KnowledgeGraphNode = {
-    id: string;
-    text: string;
-    embeddings: any;
-  }
+  id: string;
+  text: string;
+  embeddings: any;
+};
 type KnowledgeGraph = {
   nodes: KnowledgeGraphNode[];
   edges: {
@@ -18,7 +28,7 @@ type KnowledgeGraph = {
   }[];
 };
 
-const isStory = async (storyText: string) => true
+const isStory = async (storyText: string) => true;
 
 const getEndingNode = async (
   storyText: string,
@@ -29,33 +39,72 @@ const getEndingNode = async (
   text: "",
 });
 
+const generateCauseForNode = async (arg: {
+  storyText: string;
+  node: KnowledgeGraphNode;
+}): Promise<KnowledgeGraphNode[]> => {
+  return [1].map(() => ({
+    id: uuidV4(),
+    embeddings: [],
+    text: "",
+  }));
+};
+
+const expandGraph = async (arg: {
+  graph: KnowledgeGraph;
+  node: KnowledgeGraphNode;
+  storyText: string;
+}): Promise<KnowledgeGraph> => {
+  const { graph, node, storyText } = arg;
+
+  if (graph.nodes.length >= 10) return graph;
+
+  const newNodes = await generateCauseForNode({ storyText, node });
+  const expandedGraph = expandGraph({
+    graph: {
+      edges: [
+        ...graph.edges,
+        ...newNodes.map((_node) => ({ cause: _node.id, effect: node.id })),
+      ],
+      nodes: [...graph.nodes, ...newNodes],
+    },
+    node: newNodes[0],
+    storyText
+  });
+
+  return expandedGraph;
+};
+
+const createKnowledgeGraph = async (
+  storyText: string,
+  initialPrompt: string
+): Promise<KnowledgeGraph> => {
+  const knowledgeGraph: KnowledgeGraph = {
+    nodes: [],
+    edges: [],
+  };
+
+  if (!(await isStory(storyText)))
+    throw new Error("The text does not contain a story");
+
+  const endingNode = await getEndingNode(storyText, initialPrompt);
+
+  return expandGraph({ graph: knowledgeGraph, node: endingNode, storyText });
+};
+
 export default function Home() {
   const [openAiApiKey, setOpenAiApiKey] = useState<string>();
   const [storyText, setStoryText] = useState<string>();
   const [initialPrompt, setInitialPrompt] = useState<string>();
-  const [knowledgeGraph, setKnowledgeGraph] = useState<
-    KnowledgeGraph | undefined
-  >(undefined);
-
-  const createKnowledgeGraph = async (
-    storyText: string,
-    initialPrompt: string
-  ): Promise<KnowledgeGraph> => {
-    const knowledgeGraph: KnowledgeGraph = {
-      nodes: [],
-      edges: [],
-    };
-
-    if (!(await isStory(storyText)))
-      throw new Error("The text does not contain a story");
-
-    const endingNode = await getEndingNode(storyText, initialPrompt);
-    return knowledgeGraph;
-  };
+  const [knowledgeGraph, setKnowledgeGraph] = useState<KnowledgeGraph | undefined>(undefined);
+  const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
-    if (storyText && initialPrompt)
+    if (storyText && initialPrompt){
+      setLoading(true);
       setKnowledgeGraph(await createKnowledgeGraph(storyText, initialPrompt));
+      setLoading(false);
+    }
   };
 
   return (
@@ -101,11 +150,31 @@ export default function Home() {
             <Grid xs={12}>
               <Button
                 onClick={onSubmit}
-                disabled={!storyText || !openAiApiKey || !initialPrompt}
+                disabled={
+                  loading || !storyText || !openAiApiKey || !initialPrompt
+                }
               >
                 {" "}
                 Create{" "}
               </Button>
+            </Grid>
+            <Grid xs={12} position={"relative"} height={500}>
+              <GraphCanvas
+                nodes={
+                  knowledgeGraph?.nodes.map((node) => ({
+                    id: node.id,
+                    label: node.id,
+                  })) || []
+                }
+                edges={
+                  knowledgeGraph?.edges.map((edge) => ({
+                    id: `${edge.cause}->${edge.effect}`,
+                    source: edge.cause,
+                    target: edge.effect,
+                    label: "caused",
+                  })) || []
+                }
+              />
             </Grid>
             <Grid xs={12}>
               <Textarea
