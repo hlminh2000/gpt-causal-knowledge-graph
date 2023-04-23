@@ -1,10 +1,20 @@
 import Head from "next/head";
-import styles from "@/styles/Home.module.css";
-import Textarea from "@mui/joy/Textarea";
-import { Button, Container, FormLabel, Grid, Input } from "@mui/joy";
-import { useState } from "react";
-import { v4 as uuidV4 } from "uuid";
 import dynamic from "next/dynamic";
+import styles from "@/styles/Home.module.css";
+import { Configuration } from "openai";
+import { v4 as uuidV4 } from "uuid";
+import {
+  Alert,
+  Box,
+  Button,
+  Container,
+  FormLabel,
+  Grid,
+  Input,
+  Textarea,
+} from "@mui/joy";
+import React, { useMemo, useState } from "react";
+import { KnowledgeGraph, newKnowledgeGraphModel } from "@/lib/knowledgeGraph";
 
 const GraphCanvas = dynamic(
   () => import("reagraph").then((reagraph) => reagraph.GraphCanvas),
@@ -14,95 +24,63 @@ const GraphCanvas = dynamic(
   }
 );
 
-
-type KnowledgeGraphNode = {
-  id: string;
-  text: string;
-  embeddings: any;
-};
-type KnowledgeGraph = {
-  nodes: KnowledgeGraphNode[];
-  edges: {
-    cause: KnowledgeGraphNode["id"];
-    effect: KnowledgeGraphNode["id"];
-  }[];
-};
-
-const isStory = async (storyText: string) => true;
-
-const getEndingNode = async (
-  storyText: string,
-  initialPrompt: string
-): Promise<KnowledgeGraphNode> => ({
-  id: uuidV4(),
-  embeddings: [],
-  text: "",
+const ReactJson = dynamic(() => import("react-json-view"), {
+  ssr: false,
+  loading: () => <div>loading...</div>,
 });
-
-const generateCauseForNode = async (arg: {
-  storyText: string;
-  node: KnowledgeGraphNode;
-}): Promise<KnowledgeGraphNode[]> => {
-  return [1].map(() => ({
-    id: uuidV4(),
-    embeddings: [],
-    text: "",
-  }));
-};
-
-const expandGraph = async (arg: {
-  graph: KnowledgeGraph;
-  node: KnowledgeGraphNode;
-  storyText: string;
-}): Promise<KnowledgeGraph> => {
-  const { graph, node, storyText } = arg;
-
-  if (graph.nodes.length >= 10) return graph;
-
-  const newNodes = await generateCauseForNode({ storyText, node });
-  const expandedGraph = expandGraph({
-    graph: {
-      edges: [
-        ...graph.edges,
-        ...newNodes.map((_node) => ({ cause: _node.id, effect: node.id })),
-      ],
-      nodes: [...graph.nodes, ...newNodes],
-    },
-    node: newNodes[0],
-    storyText
-  });
-
-  return expandedGraph;
-};
-
-const createKnowledgeGraph = async (
-  storyText: string,
-  initialPrompt: string
-): Promise<KnowledgeGraph> => {
-  const knowledgeGraph: KnowledgeGraph = {
-    nodes: [],
-    edges: [],
-  };
-
-  if (!(await isStory(storyText)))
-    throw new Error("The text does not contain a story");
-
-  const endingNode = await getEndingNode(storyText, initialPrompt);
-
-  return expandGraph({ graph: knowledgeGraph, node: endingNode, storyText });
-};
 
 export default function Home() {
   const [openAiApiKey, setOpenAiApiKey] = useState<string>();
   const [storyText, setStoryText] = useState<string>();
   const [initialPrompt, setInitialPrompt] = useState<string>();
-  const [knowledgeGraph, setKnowledgeGraph] = useState<KnowledgeGraph | undefined>(undefined);
+  const [knowledgeGraph, setKnowledgeGraph] = useState<
+    KnowledgeGraph | undefined
+  >(undefined);
   const [loading, setLoading] = useState(false);
+  const knowledgeGraphModel = useMemo(
+    () =>
+      newKnowledgeGraphModel({
+        openAiConfiguration: new Configuration({
+          apiKey: openAiApiKey,
+        }),
+      }),
+    [openAiApiKey]
+  );
+
+  const [alerts, setAlerts] = useState<
+    {
+      id: string;
+      type?: "neutral" | "danger" | "info" | "success" | "warning";
+      message: string;
+    }[]
+  >([]);
+
+  const addAlert = (alert: (typeof alerts)[0]) => {
+    setAlerts([...alerts, alert]);
+    setTimeout(() => {
+      setAlerts((alerts) => alerts.filter((s) => s.id !== alert.id));
+    }, 10000);
+  };
 
   const onSubmit = async () => {
-    if (storyText && initialPrompt){
+    if (storyText && initialPrompt) {
       setLoading(true);
-      setKnowledgeGraph(await createKnowledgeGraph(storyText, initialPrompt));
+      setKnowledgeGraph(undefined);
+      try {
+        setKnowledgeGraph(
+          await knowledgeGraphModel.createKnowledgeGraph({
+            storyText,
+            initialPrompt,
+            onUpdate: (graph) => setKnowledgeGraph(graph),
+          })
+        );
+      } catch (err) {
+        addAlert({
+          id: uuidV4(),
+          message: (err as Error).message,
+          type: "danger",
+        });
+      }
       setLoading(false);
     }
   };
@@ -121,7 +99,8 @@ export default function Home() {
             <Grid xs={12}>
               <FormLabel>OpenAI API Key</FormLabel>
               <Input
-                placeholder="xxxxxxxx"
+                size="sm"
+                placeholder="sk-xxxxxxxx"
                 type="password"
                 value={openAiApiKey}
                 onChange={(e) => setOpenAiApiKey(e.target.value)}
@@ -130,10 +109,11 @@ export default function Home() {
             <Grid xs={12}>
               <FormLabel>The story</FormLabel>
               <Textarea
-                placeholder="Once upon a time..."
+                placeholder="Once upon a time, there was a beautiful and kind-hearted girl named Cinderella. She lived with her cruel stepmother and stepsisters who treated her as a servant, making her do all the household chores and forcing her to sleep in a dirty and cold room by the fireplace..."
                 value={storyText}
                 onChange={(e) => setStoryText(e.target.value)}
-                size="lg"
+                size="sm"
+                minRows={5}
                 sx={{ width: "100%" }}
               />
             </Grid>
@@ -143,7 +123,7 @@ export default function Home() {
                 placeholder="What is the ending of the story?"
                 value={initialPrompt}
                 onChange={(e) => setInitialPrompt(e.target.value)}
-                size="lg"
+                size="sm"
                 sx={{ width: "100%" }}
               />
             </Grid>
@@ -158,29 +138,41 @@ export default function Home() {
                 Create{" "}
               </Button>
             </Grid>
-            <Grid xs={12} position={"relative"} height={500}>
-              <GraphCanvas
-                nodes={
-                  knowledgeGraph?.nodes.map((node) => ({
-                    id: node.id,
-                    label: node.id,
-                  })) || []
-                }
-                edges={
-                  knowledgeGraph?.edges.map((edge) => ({
-                    id: `${edge.cause}->${edge.effect}`,
-                    source: edge.cause,
-                    target: edge.effect,
-                    label: "caused",
-                  })) || []
-                }
-              />
+            <Grid xs={12} container spacing={1}>
+              {alerts.map((alert) => (
+                <Grid xs={12}>
+                  <Alert key={alert.id} color={alert.type} variant="solid">
+                    {alert.message}
+                  </Alert>
+                </Grid>
+              ))}
             </Grid>
-            <Grid xs={12}>
-              <Textarea
-                variant="solid"
-                value={JSON.stringify(knowledgeGraph, null, 2)}
-              />
+            <Grid xs={12} container spacing={1}>
+              <Grid xs={12} md={6}>
+                <Box position={"relative"} height={500}>
+                  <GraphCanvas
+                    nodes={
+                      knowledgeGraph?.nodes.map((node) => ({
+                        id: node.id,
+                        label: node.text,
+                      })) || []
+                    }
+                    edges={
+                      knowledgeGraph?.edges.map((edge) => ({
+                        id: `${edge.cause}->${edge.effect}`,
+                        source: edge.cause,
+                        target: edge.effect,
+                        label: "caused",
+                      })) || []
+                    }
+                  />
+                </Box>
+              </Grid>
+              <Grid xs={12} md={6}>
+                <Box position={"relative"} height={500} overflow={"scroll"}>
+                  <ReactJson src={knowledgeGraph as object} />
+                </Box>
+              </Grid>
             </Grid>
           </Grid>
         </Container>
