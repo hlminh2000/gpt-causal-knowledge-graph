@@ -4,11 +4,13 @@ import _ from "lodash";
 import { v4 as uuidV4 } from "uuid";
 import { Configuration, OpenAIApi } from "openai";
 import { causePrompt, contextPrompt, initialQuestionPrompt } from "./prompts";
+import { consolidateGraph, mergeGraphs } from "./knowledgeGraphUtils";
 
-type KnowledgeGraphNode = {
+export type KnowledgeGraphNode = {
   id: string;
   text: string;
   embeddings: any;
+  variations: KnowledgeGraphNode[];
 };
 export type KnowledgeGraph = {
   nodes: KnowledgeGraphNode[];
@@ -17,22 +19,6 @@ export type KnowledgeGraph = {
     effect: KnowledgeGraphNode["id"];
   }[];
 };
-
-const consolidateGraph = (knowledgeGraph: KnowledgeGraph): KnowledgeGraph =>
-  knowledgeGraph;
-
-const mergeGraphs = (graphs: KnowledgeGraph[]): KnowledgeGraph => ({
-  nodes: _(graphs)
-    .map((g) => g.nodes)
-    .flattenDeep()
-    .uniqBy("id")
-    .value(),
-  edges: _(graphs)
-    .map((g) => g.edges)
-    .flattenDeep()
-    .uniqBy((edge) => `${edge.cause}:${edge.effect}`)
-    .value(),
-});
 
 const getSentenceEmbeddingModel = _.memoize(() => USE.load());
 
@@ -100,10 +86,11 @@ export const newKnowledgeGraphModel = (config: {
       id: uuidV4(),
       embeddings: await getEmbeddings(resultText),
       text: resultText,
+      variations: [],
     };
   };
 
-  const generateCauseForNode = async (arg: {
+  const generateCausesForNode = async (arg: {
     storyText: string;
     node: KnowledgeGraphNode;
   }): Promise<KnowledgeGraphNode[]> => {
@@ -118,6 +105,7 @@ export const newKnowledgeGraphModel = (config: {
         id: uuidV4(),
         embeddings: await getEmbeddings(choice.message?.content || ""),
         text: choice.message?.content || "",
+        variations: [],
       }))
     );
   };
@@ -132,7 +120,7 @@ export const newKnowledgeGraphModel = (config: {
 
     if (graph.nodes.length >= 10) return graph;
 
-    const newNodes = await generateCauseForNode({ storyText, node });
+    const newNodes = await generateCausesForNode({ storyText, node });
     const subGraphs = newNodes.map((_node) => ({
       nodes: [_node, node],
       edges: [{ cause: _node.id, effect: node.id }],
