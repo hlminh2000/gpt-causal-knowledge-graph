@@ -1,5 +1,5 @@
-import "@tensorflow/tfjs";
-import USE from "@tensorflow-models/universal-sentence-encoder";
+// import "@tensorflow/tfjs";
+// import USE from "@tensorflow-models/universal-sentence-encoder";
 import _ from "lodash";
 import { v4 as uuidV4 } from "uuid";
 import { Configuration, OpenAIApi } from "openai";
@@ -20,22 +20,22 @@ export type KnowledgeGraph = {
   }[];
 };
 
-const getSentenceEmbeddingModel = _.memoize(() => USE.load());
+// const getSentenceEmbeddingModel = _.memoize(() => USE.load());
+const getEmbeddings = _.memoize(async (text: string) => {
+  // const sentenceEmbeddingModel = await getSentenceEmbeddingModel();
+  // const output = await sentenceEmbeddingModel
+  //   .embed([text])
+  //   .then((embeddings) => embeddings.array())
+  //   .then(([array]) => array);
+  // console.log("output: ", output);
+  // return output;
+  return [];
+});
 
 export const newKnowledgeGraphModel = (config: {
   openAiConfiguration: Configuration;
 }) => {
   const openai = new OpenAIApi(config.openAiConfiguration);
-
-  const getEmbeddings = async (text: string) => {
-    const sentenceEmbeddingModel = await getSentenceEmbeddingModel();
-    const output = await sentenceEmbeddingModel
-      .embed([text])
-      .then((embeddings) => embeddings.array())
-      .then(([array]) => array);
-    console.log("output: ", output);
-    return output;
-  };
 
   const executePrompt = async (
     storyText: string,
